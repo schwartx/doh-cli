@@ -62,7 +62,6 @@ pub fn run(args: Args) {
     if args.show_resp_body {
         println!("{:?}", res.text().expect("parse response text"));
     }
-    todo!()
 }
 
 /// build a ready http request(get/post) without sending
