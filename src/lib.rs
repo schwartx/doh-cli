@@ -29,12 +29,16 @@ pub struct Args {
     #[arg(short = 'c', long, value_enum, default_value_t=DNSClass::IN)]
     domain_class: DNSClass,
 
-    /// should show response body
+    /// should print response body
     #[arg(long = "body")]
     show_resp_body: bool,
 
+    /// should print response header
+    #[arg(long = "header", default_value_t = true)]
+    show_resp_header: bool,
+
     /// dns-over-http query url
-    #[arg(long, default_value=DEFAULT_QUERY_URL)]
+    #[arg(short, long, default_value=DEFAULT_QUERY_URL)]
     url: String,
 }
 
@@ -63,8 +67,12 @@ pub fn run(args: Args) -> AppResult<()> {
     let req = build_request(&args, dns_msg);
 
     let res = req?.send()?;
+    for (k, v) in res.headers() {
+        println!("{:<30} {:<30}", k, v.to_str()?);
+    }
     if args.show_resp_body {
-        println!("{:?}", res.text()?);
+        // TODO: decode msg
+        println!("{:?}", res.bytes()?);
     }
     Ok(())
 }
@@ -84,7 +92,41 @@ fn build_request(args: &Args, dns_msg: Bytes) -> AppResult<RequestBuilder> {
     }
 }
 
-/// encode DNS Wireformat
+/// encodes DNS Wireformat, DNS header+Question section
+/// DNS header format(copy from [RFC 1035]):
+///
+///                                 1  1  1  1  1  1
+///   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                      ID                       |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |QR|   Opcode  |AA|TC|RD|RA|   Z    |   RCODE   |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                    QDCOUNT                    |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                    ANCOUNT                    |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                    NSCOUNT                    |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                    ARCOUNT                    |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+///
+/// Question section format(copy from [RFC 1035]):
+///
+///                                 1  1  1  1  1  1
+///   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                                               |
+/// /                     QNAME                     /
+/// /                                               /
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                     QTYPE                     |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+/// |                     QCLASS                    |
+/// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+///
+///
+/// [RFC 1035]: https://www.ietf.org/rfc/rfc1035.txt
 fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> AppResult<Bytes> {
     let mut buf = BytesMut::new();
 
@@ -190,6 +232,7 @@ fn test_build_request() {
         domain_type: DNSType::A,
         domain_class: DNSClass::IN,
         show_resp_body: true,
+        show_resp_header: true,
         url: DEFAULT_QUERY_URL.to_owned(),
     };
     let _req = build_request(&args, dns_msg.clone());
@@ -201,6 +244,7 @@ fn test_build_request() {
         domain_type: DNSType::A,
         domain_class: DNSClass::IN,
         show_resp_body: true,
+        show_resp_header: true,
         url: "sdkl".to_owned(),
     };
     let _req = build_request(&args, dns_msg.clone());
