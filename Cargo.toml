@@ -1,0 +1,15 @@
+[package]
+name = "doh-cli"
+version = "0.1.0"
+edition = "2021"
+author  ="Ichika"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "1.4.0"
+clap = { version = "4.1.13", features = ["derive"] }
+
+[dev-dependencies]
+predicates = "3.0.2"
+assert_cmd = "2.0.10"
