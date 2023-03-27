@@ -18,11 +18,11 @@ pub struct Args {
     domain_name: String,
 
     /// choose a dns type
-    #[arg(short = 't', long, value_enum)]
+    #[arg(short = 't', long, value_enum, default_value_t=DNSType::A)]
     domain_type: DNSType,
 
     /// choose a dns class
-    #[arg(short = 'c', long, value_enum)]
+    #[arg(short = 'c', long, value_enum, default_value_t=DNSClass::IN)]
     domain_class: DNSClass,
 
     /// should show response body
