@@ -10,6 +10,7 @@ author  ="Ichika"
 base64 = "0.21.0"
 bytes = "1.4.0"
 clap = { version = "4.1.13", features = ["derive"] }
+reqwest = {version = "0.11.16", features = ["blocking"]}
 
 [dev-dependencies]
 predicates = "3.0.2"

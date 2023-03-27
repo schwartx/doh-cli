@@ -1,16 +1,20 @@
 use base64::{engine::general_purpose, Engine as _};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, ValueEnum};
+use reqwest::{blocking::Client, blocking::RequestBuilder, header::HeaderMap};
+
+static DEFAULT_DOMAIN_NAME: &'static str = "example.com";
+static DEFAULT_QUERY_URL: &'static str = "https://localhost:8443/dns-query";
 
 #[derive(Parser)]
 #[command(author, version)]
-struct Cli {
+pub struct Args {
     /// using get method
     #[arg(short, long)]
     get: bool,
 
     /// query domain name
-    #[arg(short = 'n', long, default_value = "example.com")]
+    #[arg(short = 'n', long, default_value=DEFAULT_DOMAIN_NAME)]
     domain_name: String,
 
     /// choose a dns type
@@ -26,11 +30,11 @@ struct Cli {
     show_resp_body: bool,
 
     /// dns-over-http query url
-    #[arg(long, default_value = "https://localhost:8443/dns-query")]
+    #[arg(long, default_value=DEFAULT_QUERY_URL)]
     url: String,
 }
 
-#[derive(ValueEnum, Clone)]
+#[derive(ValueEnum, Clone, Copy)]
 enum DNSType {
     A = 1,
     AAAA = 28,
@@ -40,18 +44,43 @@ enum DNSType {
     NS = 2,
 }
 
-#[derive(ValueEnum, Clone)]
+#[derive(ValueEnum, Clone, Copy)]
 enum DNSClass {
     IN = 1,
 }
 
-pub fn run() {
-    let cli = Cli::parse();
-    println!("get: {:?}", cli.get);
-    println!("domain_name: {:?}", cli.domain_name);
+pub fn get_args() -> Args {
+    Args::parse()
 }
 
-///
+pub fn run(args: Args) {
+    let dns_msg = encode_query(&args.domain_name, args.domain_type, args.domain_class);
+
+    let req = build_request(&args, dns_msg);
+
+    let res = req.send().expect("send request");
+    if args.show_resp_body {
+        println!("{:?}", res.text().expect("parse response text"));
+    }
+    todo!()
+}
+
+/// build a ready http request(get/post) without sending
+fn build_request(args: &Args, dns_msg: Bytes) -> RequestBuilder {
+    let mut headers = HeaderMap::new();
+    headers.insert("Content-Type", "application/dns-message".parse().unwrap());
+    let client = Client::builder().default_headers(headers).build().unwrap();
+
+    if args.get {
+        let dns_msg = bytes_to_base64_encode(&dns_msg);
+        let url = format!("{}?dns={}", args.url.as_str(), dns_msg);
+        client.get(url)
+    } else {
+        client.post(args.url.as_str()).body(dns_msg)
+    }
+}
+
+/// encode DNS Wireformat
 fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> Bytes {
     let mut buf = BytesMut::new();
 
@@ -117,15 +146,47 @@ fn test_encode_query() {
         bytes_to_base64_encode(&b)
     );
 
-    let b = encode_query("example.com", DNSType::AAAA, DNSClass::IN);
+    let b = encode_query(DEFAULT_DOMAIN_NAME, DNSType::AAAA, DNSClass::IN);
     assert_eq!(
         "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAAcAAE",
         bytes_to_base64_encode(&b)
     );
 
-    let b = encode_query("example.com", DNSType::A, DNSClass::IN);
+    let b = encode_query(DEFAULT_DOMAIN_NAME, DNSType::A, DNSClass::IN);
     assert_eq!(
         "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
         bytes_to_base64_encode(&b)
     );
+}
+
+#[test]
+fn test_build_request() {
+    fn bytes_to_base64_decode(b: &str) -> Bytes {
+        let b = general_purpose::STANDARD_NO_PAD.decode(b).unwrap();
+        Bytes::from(b)
+    }
+    // generate a dns msg for testing
+    let dns_msg = bytes_to_base64_decode("CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE");
+
+    // get method, normal url
+    let args = Args {
+        get: true,
+        domain_name: DEFAULT_DOMAIN_NAME.to_owned(),
+        domain_type: DNSType::A,
+        domain_class: DNSClass::IN,
+        show_resp_body: true,
+        url: DEFAULT_QUERY_URL.to_owned(),
+    };
+    let req = build_request(&args, dns_msg.clone());
+
+    // get method, invalid url
+    let args = Args {
+        get: true,
+        domain_name: DEFAULT_DOMAIN_NAME.to_owned(),
+        domain_type: DNSType::A,
+        domain_class: DNSClass::IN,
+        show_resp_body: true,
+        url: "sdkl".to_owned(),
+    };
+    let req = build_request(&args, dns_msg.clone());
 }

@@ -1,3 +1,4 @@
 fn main() {
-    doh_cli::run();
+    let args = doh_cli::get_args();
+    doh_cli::run(args);
 }
