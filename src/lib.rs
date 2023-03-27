@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use base64::{engine::general_purpose, Engine as _};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, ValueEnum};
@@ -5,6 +7,8 @@ use reqwest::{blocking::Client, blocking::RequestBuilder, header::HeaderMap};
 
 static DEFAULT_DOMAIN_NAME: &'static str = "example.com";
 static DEFAULT_QUERY_URL: &'static str = "https://localhost:8443/dns-query";
+
+type AppResult<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -53,34 +57,35 @@ pub fn get_args() -> Args {
     Args::parse()
 }
 
-pub fn run(args: Args) {
-    let dns_msg = encode_query(&args.domain_name, args.domain_type, args.domain_class);
+pub fn run(args: Args) -> AppResult<()> {
+    let dns_msg = encode_query(&args.domain_name, args.domain_type, args.domain_class)?;
 
     let req = build_request(&args, dns_msg);
 
-    let res = req.send().expect("send request");
+    let res = req?.send()?;
     if args.show_resp_body {
-        println!("{:?}", res.text().expect("parse response text"));
+        println!("{:?}", res.text()?);
     }
+    Ok(())
 }
 
 /// build a ready http request(get/post) without sending
-fn build_request(args: &Args, dns_msg: Bytes) -> RequestBuilder {
+fn build_request(args: &Args, dns_msg: Bytes) -> AppResult<RequestBuilder> {
     let mut headers = HeaderMap::new();
-    headers.insert("Content-Type", "application/dns-message".parse().unwrap());
-    let client = Client::builder().default_headers(headers).build().unwrap();
+    headers.insert("Content-Type", "application/dns-message".parse()?);
+    let client = Client::builder().default_headers(headers).build()?;
 
     if args.get {
         let dns_msg = bytes_to_base64_encode(&dns_msg);
         let url = format!("{}?dns={}", args.url.as_str(), dns_msg);
-        client.get(url)
+        Ok(client.get(url))
     } else {
-        client.post(args.url.as_str()).body(dns_msg)
+        Ok(client.post(args.url.as_str()).body(dns_msg))
     }
 }
 
 /// encode DNS Wireformat
-fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> Bytes {
+fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> AppResult<Bytes> {
     let mut buf = BytesMut::new();
 
     // construct a dns header
@@ -116,6 +121,10 @@ fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> Bytes {
     // qname
     // TODO: validate str
     let labels: Vec<&str> = fqdn.split('.').collect();
+    // domain name must be splitted at least once
+    if labels.len() < 2 {
+        return Err(From::from(format!("invalid domain name: `{}`", fqdn)));
+    }
     for l in labels {
         // fill len
         buf.put_u8(l.len() as u8);
@@ -130,7 +139,7 @@ fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> Bytes {
     // qclass
     let c = c as u16;
     buf.put_u16(c);
-    buf.freeze()
+    Ok(buf.freeze())
 }
 
 fn bytes_to_base64_encode(b: &Bytes) -> String {
@@ -140,22 +149,29 @@ fn bytes_to_base64_encode(b: &Bytes) -> String {
 #[test]
 fn test_encode_query() {
     let b = encode_query("baidu.com", DNSType::A, DNSClass::IN);
+    assert!(b.is_ok());
     assert_eq!(
         "CAkBEAABAAAAAAAABWJhaWR1A2NvbQAAAQAB",
-        bytes_to_base64_encode(&b)
+        bytes_to_base64_encode(&b.unwrap())
     );
 
     let b = encode_query(DEFAULT_DOMAIN_NAME, DNSType::AAAA, DNSClass::IN);
+    assert!(b.is_ok());
     assert_eq!(
         "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAAcAAE",
-        bytes_to_base64_encode(&b)
+        bytes_to_base64_encode(&b.unwrap())
     );
 
     let b = encode_query(DEFAULT_DOMAIN_NAME, DNSType::A, DNSClass::IN);
+    assert!(b.is_ok());
     assert_eq!(
         "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
-        bytes_to_base64_encode(&b)
+        bytes_to_base64_encode(&b.unwrap())
     );
+
+    // invalid domain name
+    let b = encode_query("baidu", DNSType::A, DNSClass::IN);
+    assert!(b.is_err());
 }
 
 #[test]
@@ -176,7 +192,7 @@ fn test_build_request() {
         show_resp_body: true,
         url: DEFAULT_QUERY_URL.to_owned(),
     };
-    let req = build_request(&args, dns_msg.clone());
+    let _req = build_request(&args, dns_msg.clone());
 
     // get method, invalid url
     let args = Args {
@@ -187,5 +203,5 @@ fn test_build_request() {
         show_resp_body: true,
         url: "sdkl".to_owned(),
     };
-    let req = build_request(&args, dns_msg.clone());
+    let _req = build_request(&args, dns_msg.clone());
 }
