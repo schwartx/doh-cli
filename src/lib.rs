@@ -5,8 +5,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, ValueEnum};
 use reqwest::{blocking::Client, blocking::RequestBuilder, header::HeaderMap};
 
-static DEFAULT_DOMAIN_NAME: &'static str = "example.com";
-static DEFAULT_QUERY_URL: &'static str = "https://localhost:8443/dns-query";
+static DEFAULT_DOMAIN_NAME: &str = "example.com";
+static DEFAULT_QUERY_URL: &str = "https://localhost:8443/dns-query";
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
@@ -43,6 +43,7 @@ pub struct Args {
 }
 
 #[derive(ValueEnum, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
 enum DNSType {
     A = 1,
     AAAA = 28,
@@ -127,6 +128,7 @@ fn build_request(args: &Args, dns_msg: Bytes) -> AppResult<RequestBuilder> {
 ///
 ///
 /// [RFC 1035]: https://www.ietf.org/rfc/rfc1035.txt
+#[allow(clippy::identity_op, clippy::eq_op)]
 fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> AppResult<Bytes> {
     let mut buf = BytesMut::new();
 
@@ -247,5 +249,5 @@ fn test_build_request() {
         show_resp_header: true,
         url: "sdkl".to_owned(),
     };
-    let _req = build_request(&args, dns_msg.clone());
+    let _req = build_request(&args, dns_msg);
 }
