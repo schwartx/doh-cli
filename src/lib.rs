@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, ValueEnum};
 
@@ -93,9 +94,38 @@ fn encode_query(fqdn: &str, t: DNSType, c: DNSClass) -> Bytes {
         // fill byte array
         buf.put_slice(l.as_bytes());
     }
+    // placeholder
+    buf.put_u8(0);
     // qtype
-    buf.put_u16(t as u16);
+    let t = t as u16;
+    buf.put_u16(t);
     // qclass
-    buf.put_u16(c as u16);
+    let c = c as u16;
+    buf.put_u16(c);
     buf.freeze()
+}
+
+fn bytes_to_base64_encode(b: &Bytes) -> String {
+    general_purpose::STANDARD_NO_PAD.encode(b)
+}
+
+#[test]
+fn test_encode_query() {
+    let b = encode_query("baidu.com", DNSType::A, DNSClass::IN);
+    assert_eq!(
+        "CAkBEAABAAAAAAAABWJhaWR1A2NvbQAAAQAB",
+        bytes_to_base64_encode(&b)
+    );
+
+    let b = encode_query("example.com", DNSType::AAAA, DNSClass::IN);
+    assert_eq!(
+        "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAAcAAE",
+        bytes_to_base64_encode(&b)
+    );
+
+    let b = encode_query("example.com", DNSType::A, DNSClass::IN);
+    assert_eq!(
+        "CAkBEAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
+        bytes_to_base64_encode(&b)
+    );
 }

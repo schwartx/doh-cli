@@ -7,6 +7,7 @@ author  ="Ichika"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+base64 = "0.21.0"
 bytes = "1.4.0"
 clap = { version = "4.1.13", features = ["derive"] }
 
