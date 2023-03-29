@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Release for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: linux-amd64
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --release
+      - name: Set the release version
+        run: echo "RELEASE_VERSION=${GITHUB_REF:11}" >> $GITHUB_ENV
+      - name: Create release artifacts
+        run: |
+          tar -czvf doh-cli-${{ env.RELEASE_VERSION }}-${{ matrix.asset_name }}.tar.gz \
+            ./target/release/doh-cli
+          shasum -a 512 doh-cli-${{ env.RELEASE_VERSION }}-${{ matrix.asset_name }}.tar.gz \
+            > doh-cli-${{ env.RELEASE_VERSION }}-${{ matrix.asset_name }}.tar.gz.sha512
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: doh-cli-${{ env.RELEASE_VERSION }}-${{ matrix.asset_name }}*
+          file_glob: true
+          overwrite: true
+          tag: ${{ env.RELEASE_VERSION }}
+          release_name: "Release ${{ env.RELEASE_VERSION }}"
